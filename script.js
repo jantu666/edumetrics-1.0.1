@@ -1160,7 +1160,8 @@ function normalizeCloudScheduledRow(row) {
 async function uploadScheduledTestToCloud(data, entry) {
   const cfg = getCloudScheduleConfig(data);
   if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) return false;
-  const url = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=id`;
+  const upsertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=id`;
+  const insertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}`;
   const payload = {
     id: entry.id,
     created_at: entry.createdAt,
@@ -1178,7 +1179,7 @@ async function uploadScheduledTestToCloud(data, entry) {
     duration_hours: entry.durationHours,
     auto_seed: entry.autoSeed
   };
-  const res = await fetch(url, {
+  const res = await fetch(upsertUrl, {
     method: "POST",
     headers: {
       apikey: cfg.anonKey,
@@ -1188,7 +1189,27 @@ async function uploadScheduledTestToCloud(data, entry) {
     },
     body: JSON.stringify(payload)
   });
-  return res.ok;
+  if (res.ok) return true;
+  const upsertError = await res.text().catch(() => "");
+  const insertRes = await fetch(insertUrl, {
+    method: "POST",
+    headers: {
+      apikey: cfg.anonKey,
+      Authorization: `Bearer ${cfg.anonKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal"
+    },
+    body: JSON.stringify(payload)
+  });
+  if (insertRes.ok) return true;
+  const insertError = await insertRes.text().catch(() => "");
+  console.error("cloudSchedule upload failed", {
+    upsertStatus: res.status,
+    upsertError,
+    insertStatus: insertRes.status,
+    insertError
+  });
+  return false;
 }
 
 async function refreshScheduledTestsFromCloud(data) {
@@ -1306,7 +1327,8 @@ function normalizeCloudResultRow(row) {
 async function uploadResultToCloud(data, entry) {
   const cfg = getCloudResultsConfig(data);
   if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) return false;
-  const url = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=schedule_id,student_login`;
+  const upsertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=schedule_id,student_login`;
+  const insertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}`;
   const payload = {
     schedule_id: entry.scheduleId,
     student_login: entry.studentLogin,
@@ -1316,7 +1338,7 @@ async function uploadResultToCloud(data, entry) {
     submitted_at: entry.submittedAt,
     answers: entry.answers
   };
-  const res = await fetch(url, {
+  const res = await fetch(upsertUrl, {
     method: "POST",
     headers: {
       apikey: cfg.anonKey,
@@ -1326,7 +1348,27 @@ async function uploadResultToCloud(data, entry) {
     },
     body: JSON.stringify(payload)
   });
-  return res.ok;
+  if (res.ok) return true;
+  const upsertError = await res.text().catch(() => "");
+  const insertRes = await fetch(insertUrl, {
+    method: "POST",
+    headers: {
+      apikey: cfg.anonKey,
+      Authorization: `Bearer ${cfg.anonKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal"
+    },
+    body: JSON.stringify(payload)
+  });
+  if (insertRes.ok) return true;
+  const insertError = await insertRes.text().catch(() => "");
+  console.error("cloudResults upload failed", {
+    upsertStatus: res.status,
+    upsertError,
+    insertStatus: insertRes.status,
+    insertError
+  });
+  return false;
 }
 
 async function refreshResultsFromCloud(data) {
