@@ -1144,7 +1144,8 @@ function getCloudScheduleConfig(data) {
   const baseUrl = String(cfg.baseUrl || data?.cloudResults?.baseUrl || "").replace(/\/+$/, "");
   const anonKey = String(cfg.anonKey || data?.cloudResults?.anonKey || "");
   const table = String(cfg.table || "scheduled_tests");
-  return { enabled, provider, baseUrl, anonKey, table };
+  const idMode = String(cfg.idMode || "identity").toLowerCase();
+  return { enabled, provider, baseUrl, anonKey, table, idMode };
 }
 
 function normalizeCloudScheduledRow(row) {
@@ -1174,7 +1175,7 @@ function normalizeCloudScheduledRow(row) {
 async function uploadScheduledTestToCloud(data, entry) {
   const cfg = getCloudScheduleConfig(data);
   if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) return false;
-  const useIdUpsert = isUuid(entry?.id);
+  const useIdUpsert = cfg.idMode === "uuid" && isUuid(entry?.id);
   const upsertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=id`;
   const insertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}`;
   const payloadSnake = {

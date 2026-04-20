@@ -268,7 +268,8 @@
     "provider": "supabase",
     "baseUrl": "https://yrrpexagyksrlkbtzcev.supabase.co",
     "anonKey": "sb_publishable_tvfRTuwa40I4pnJL-C194w_y_sKpGF4",
-    "table": "scheduled_tests"
+    "table": "scheduled_tests",
+    "idMode": "identity"
   },
   "footer": {
     "contactsTitle": { "kz": "Байланыс", "ru": "Контакты" },
