@@ -2059,8 +2059,10 @@ function getOpenAIApiKey(data) {
 }
 
 async function sendChatMessage(data, message) {
+  const endpoint = data.aiTutor?.endpoint || "https://api.openai.com/v1/chat/completions";
+  const isSupabaseFn = /supabase\.co\/functions\/v1\//i.test(String(endpoint));
   const key = getOpenAIApiKey(data);
-  if (!key) {
+  if (!key && !isSupabaseFn) {
     alert(
       state.lang === "kz"
         ? "OpenAI API кілті жоқ: data.json → aiTutor.apiKey немесе localStorage (edumetrics:apiKey)."
@@ -2073,7 +2075,6 @@ async function sendChatMessage(data, message) {
   renderApp(data);
   try {
     const model = (data.aiTutor?.model || "gpt-4o-mini").trim();
-    const endpoint = data.aiTutor?.endpoint || "https://api.openai.com/v1/chat/completions";
     const payload = {
       model,
       messages: [
@@ -2081,12 +2082,19 @@ async function sendChatMessage(data, message) {
         ...state.chatMessages.map((x) => ({ role: x.role, content: x.content }))
       ]
     };
+    const headers = { "Content-Type": "application/json" };
+    if (isSupabaseFn) {
+      if (key) {
+        headers.apikey = key;
+        headers["x-api-key"] = key;
+        headers.Authorization = `Bearer ${key}`;
+      }
+    } else if (key) {
+      headers.Authorization = `Bearer ${key}`;
+    }
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`
-      },
+      headers,
       body: JSON.stringify(payload)
     });
     const raw = await res.text();

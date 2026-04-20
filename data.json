@@ -248,9 +248,9 @@
   "aiTutor": {
     "title": { "kz": "Көмекші Метрикс", "ru": "Помощник Метрикс" },
     "subtitle": { "kz": "", "ru": "" },
-    "apiKey": "sk-1234uvwxabcd5678uvwxabcd1234uvwxabcd5678",
+    "apiKey": "78937c5f14de4e6f58b3ad5a98d3c34360ac947bf7bef504a46a86122015d42a",
     "model": "gpt-4o-mini",
-    "endpoint": "https://api.openai.com/v1/chat/completions",
+    "endpoint": "https://yrrpexagyksrlkbtzcev.supabase.co/functions/v1/ai-chat",
     "systemPrompt": {
       "kz": "Сен Қазақстан оқушыларына көмектесетін оқу репетиторысың. Түсінікті, қысқа, нақты жауап бер.",
       "ru": "Ты учебный ИИ-репетитор для школьников Казахстана. Отвечай ясно, коротко и по делу."
