@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   scheduledTests: "edumetrics:scheduledTests",
   testResults: "edumetrics:testResults",
   cloudResultsCache: "edumetrics:cloudResultsCache",
+  cloudScheduleCache: "edumetrics:cloudScheduleCache",
   lang: "edumetrics:lang",
   themeMode: "edumetrics:themeMode"
 };
@@ -468,7 +469,9 @@ const state = {
   scheduleStartTime: "09:00",
   scheduleFormErrors: {},
   cloudResults: [],
-  cloudLoaded: false
+  cloudLoaded: false,
+  cloudScheduledTests: [],
+  cloudScheduleLoaded: false
 };
 
 // shell
@@ -1098,23 +1101,167 @@ function pruneScheduleStudentSelection() {
   state.scheduleDraft.selectedStudentLogins = state.scheduleDraft.selectedStudentLogins.filter((l) => allowed.has(l));
 }
 
-function pushScheduledTest(entry) {
+function saveLocalScheduledTest(entry) {
   let arr = [];
   try {
     arr = JSON.parse(localStorage.getItem(STORAGE_KEYS.scheduledTests) || "[]");
   } catch {
     arr = [];
   }
-  arr.push(entry);
+  const idx = arr.findIndex((x) => x?.id === entry?.id);
+  if (idx >= 0) arr[idx] = { ...arr[idx], ...entry };
+  else arr.push(entry);
   localStorage.setItem(STORAGE_KEYS.scheduledTests, JSON.stringify(arr));
 }
 
 function getScheduledTests() {
+  if (state.cloudScheduleLoaded) return Array.isArray(state.cloudScheduledTests) ? state.cloudScheduledTests : [];
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.scheduledTests) || "[]");
   } catch {
     return [];
   }
+}
+
+function getCloudScheduleConfig(data) {
+  const cfg = data?.cloudSchedule || {};
+  const provider = String(cfg.provider || "").toLowerCase();
+  const enabled = Boolean(cfg.enabled) && provider === "supabase";
+  const baseUrl = String(cfg.baseUrl || data?.cloudResults?.baseUrl || "").replace(/\/+$/, "");
+  const anonKey = String(cfg.anonKey || data?.cloudResults?.anonKey || "");
+  const table = String(cfg.table || "scheduled_tests");
+  return { enabled, provider, baseUrl, anonKey, table };
+}
+
+function normalizeCloudScheduledRow(row) {
+  return {
+    id: row.id ?? "",
+    createdAt: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+    calendarDate: row.calendar_date ?? row.calendarDate ?? "",
+    testType: row.test_type ?? row.testType ?? "subject",
+    subject: row.subject ?? "informatics",
+    questionCount: Number(row.question_count ?? row.questionCount ?? INFORMATICS_QUESTIONS.length),
+    grades: Array.isArray(row.grades) ? row.grades.map(String) : [],
+    letter: row.letter ?? null,
+    includeAllStudentsInGrades: Boolean(row.include_all_students_in_grades ?? row.includeAllStudentsInGrades),
+    studentLogins: Array.isArray(row.student_logins) ? row.student_logins : Array.isArray(row.studentLogins) ? row.studentLogins : [],
+    studentsSnapshot: Array.isArray(row.students_snapshot)
+      ? row.students_snapshot
+      : Array.isArray(row.studentsSnapshot)
+        ? row.studentsSnapshot
+        : [],
+    language: row.language ?? "kk",
+    startTime: row.start_time ?? row.startTime ?? "",
+    durationHours: Number(row.duration_hours ?? row.durationHours ?? 24),
+    autoSeed: Boolean(row.auto_seed ?? row.autoSeed)
+  };
+}
+
+async function uploadScheduledTestToCloud(data, entry) {
+  const cfg = getCloudScheduleConfig(data);
+  if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) return false;
+  const url = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=id`;
+  const payload = {
+    id: entry.id,
+    created_at: entry.createdAt,
+    calendar_date: entry.calendarDate,
+    test_type: entry.testType,
+    subject: entry.subject,
+    question_count: entry.questionCount,
+    grades: entry.grades,
+    letter: entry.letter,
+    include_all_students_in_grades: entry.includeAllStudentsInGrades,
+    student_logins: entry.studentLogins,
+    students_snapshot: entry.studentsSnapshot,
+    language: entry.language,
+    start_time: entry.startTime,
+    duration_hours: entry.durationHours,
+    auto_seed: entry.autoSeed
+  };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      apikey: cfg.anonKey,
+      Authorization: `Bearer ${cfg.anonKey}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=minimal"
+    },
+    body: JSON.stringify(payload)
+  });
+  return res.ok;
+}
+
+async function refreshScheduledTestsFromCloud(data) {
+  const cfg = getCloudScheduleConfig(data);
+  if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) {
+    state.cloudScheduleLoaded = false;
+    return false;
+  }
+  const url = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?select=*&order=created_at.desc`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: cfg.anonKey,
+      Authorization: `Bearer ${cfg.anonKey}`
+    }
+  });
+  if (!res.ok) return false;
+  const rows = await res.json();
+  const normalized = Array.isArray(rows)
+    ? rows.map(normalizeCloudScheduledRow).filter((r) => r.id)
+    : [];
+  state.cloudScheduledTests = normalized;
+  state.cloudScheduleLoaded = true;
+  try {
+    localStorage.setItem(STORAGE_KEYS.cloudScheduleCache, JSON.stringify(normalized));
+  } catch {
+    /* skip */
+  }
+  return true;
+}
+
+function restoreCloudScheduleCache() {
+  try {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.cloudScheduleCache) || "[]");
+    if (Array.isArray(list) && list.length) {
+      state.cloudScheduledTests = list;
+      state.cloudScheduleLoaded = true;
+    }
+  } catch {
+    /* skip */
+  }
+}
+
+async function saveScheduledTest(data, entry) {
+  saveLocalScheduledTest(entry);
+  let cloudOk = false;
+  try {
+    cloudOk = await uploadScheduledTestToCloud(data, entry);
+  } catch {
+    cloudOk = false;
+  }
+  if (cloudOk) await refreshScheduledTestsFromCloud(data);
+  return cloudOk;
+}
+
+async function migrateLocalScheduledTestsToCloud(data) {
+  const cfg = getCloudScheduleConfig(data);
+  if (!cfg.enabled) return;
+  let local = [];
+  try {
+    local = JSON.parse(localStorage.getItem(STORAGE_KEYS.scheduledTests) || "[]");
+  } catch {
+    local = [];
+  }
+  if (!Array.isArray(local) || !local.length) return;
+  if (state.cloudScheduleLoaded && Array.isArray(state.cloudScheduledTests) && state.cloudScheduledTests.length) return;
+  for (const entry of local) {
+    try {
+      await uploadScheduledTestToCloud(data, entry);
+    } catch {
+      /* skip */
+    }
+  }
+  await refreshScheduledTestsFromCloud(data);
 }
 
 function getTestResultsList() {
@@ -1978,6 +2125,7 @@ function attachEvents(data) {
     });
     if (role === "admin") navigate("/admin");
     else navigate("/student");
+    await refreshScheduledTestsFromCloud(data);
     await refreshResultsFromCloud(data);
     renderApp(data);
   });
@@ -2136,7 +2284,7 @@ function attachEvents(data) {
     }
   });
 
-  schedForm?.addEventListener("submit", (e) => {
+  schedForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const st = data.scheduleTest ?? {};
     state.scheduleFormErrors = {};
@@ -2186,13 +2334,19 @@ function attachEvents(data) {
       startTime,
       durationHours: Number(fd.get("durationHours"))
     };
-    pushScheduledTest(entry);
+    const cloudOk = await saveScheduledTest(data, entry);
     state.scheduleFormErrors = {};
     state.scheduleDraft.selectedStudentLogins = [];
     showToast(
       data,
-      state.lang === "kz" ? "Тест сәтті жоспарланды. Оқушыларға қолжетімді болады." : "Тест успешно запланирован. Он станет доступен ученикам.",
-      "success",
+      cloudOk
+        ? state.lang === "kz"
+          ? "Тест сәтті жоспарланды және бұлтқа сақталды."
+          : "Тест успешно запланирован и сохранен в облако."
+        : state.lang === "kz"
+          ? "Тест локалды жоспарланды. Бұлтқа сақтау сәтсіз."
+          : "Тест запланирован локально. Сохранение в облако не удалось.",
+      cloudOk ? "success" : "error",
       3200
     );
     renderApp(data);
@@ -2323,6 +2477,7 @@ async function init() {
   syncDemoStudentsIntoScheduledTests();
   state.currentUser = restoreSessionUser();
   restoreCloudResultsCache();
+  restoreCloudScheduleCache();
   const dataUrl = new URL("data.json", window.location.href);
   try {
     if (window.location.protocol === "file:") {
@@ -2335,6 +2490,8 @@ async function init() {
     const data = await res.json();
     normalizeAppData(data);
     cacheData(data);
+    await refreshScheduledTestsFromCloud(data);
+    await migrateLocalScheduledTestsToCloud(data);
     await refreshResultsFromCloud(data);
     renderApp(data);
   } catch {
@@ -2347,6 +2504,7 @@ window.addEventListener("hashchange", async () => {
   if (cached) {
     const path = parseRoute();
     if (path.startsWith("/admin/results") || path.startsWith("/student")) {
+      await refreshScheduledTestsFromCloud(cached);
       await refreshResultsFromCloud(cached);
     }
     renderApp(cached);
@@ -2358,6 +2516,7 @@ window.addEventListener("hashchange", async () => {
         normalizeAppData(d);
         cacheData(d);
         if (parseRoute().startsWith("/admin/results") || parseRoute().startsWith("/student")) {
+          await refreshScheduledTestsFromCloud(d);
           await refreshResultsFromCloud(d);
         }
         renderApp(d);

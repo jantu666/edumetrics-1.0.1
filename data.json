@@ -263,6 +263,13 @@
     "anonKey": "sb_publishable_tvfRTuwa40I4pnJL-C194w_y_sKpGF4",
     "table": "test_results"
   },
+  "cloudSchedule": {
+    "enabled": true,
+    "provider": "supabase",
+    "baseUrl": "https://yrrpexagyksrlkbtzcev.supabase.co",
+    "anonKey": "sb_publishable_tvfRTuwa40I4pnJL-C194w_y_sKpGF4",
+    "table": "scheduled_tests"
+  },
   "footer": {
     "contactsTitle": { "kz": "Байланыс", "ru": "Контакты" },
     "contacts": {
