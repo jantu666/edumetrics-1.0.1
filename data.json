@@ -248,7 +248,7 @@
   "aiTutor": {
     "title": { "kz": "Көмекші Метрикс", "ru": "Помощник Метрикс" },
     "subtitle": { "kz": "", "ru": "" },
-    "apiKey": "78937c5f14de4e6f58b3ad5a98d3c34360ac947bf7bef504a46a86122015d42a",
+    "apiKey": "0a67f01bf17152333be3a3f9fa1f7502abdb6e0762b0e3bbd4d9f6d04749f8fd",
     "model": "gpt-4o-mini",
     "endpoint": "https://yrrpexagyksrlkbtzcev.supabase.co/functions/v1/ai-chat",
     "systemPrompt": {
