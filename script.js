@@ -1175,8 +1175,6 @@ function normalizeCloudScheduledRow(row) {
 async function uploadScheduledTestToCloud(data, entry) {
   const cfg = getCloudScheduleConfig(data);
   if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) return false;
-  const useIdUpsert = cfg.idMode === "uuid" && isUuid(entry?.id);
-  const upsertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=id`;
   const insertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}`;
   const payloadSnake = {
     created_at: entry.createdAt,
@@ -1210,50 +1208,9 @@ async function uploadScheduledTestToCloud(data, entry) {
     durationHours: entry.durationHours,
     autoSeed: entry.autoSeed
   };
-  if (useIdUpsert) {
-    payloadSnake.id = entry.id;
-    payloadCamel.id = entry.id;
-  }
-  const primaryUrl = useIdUpsert ? upsertUrl : insertUrl;
-  const primaryPrefer = useIdUpsert ? "resolution=merge-duplicates,return=representation" : "return=representation";
-  let res = await fetch(primaryUrl, {
-    method: "POST",
-    headers: {
-      apikey: cfg.anonKey,
-      Authorization: `Bearer ${cfg.anonKey}`,
-      "Content-Type": "application/json",
-      Prefer: primaryPrefer
-    },
-    body: JSON.stringify(payloadSnake)
-  });
-  let firstErrorText = "";
-  if (!res.ok) {
-    firstErrorText = await res.text().catch(() => "");
-    const needCamelRetry = firstErrorText.includes("Could not find the 'calendar_date' column");
-    if (needCamelRetry) {
-      res = await fetch(primaryUrl, {
-        method: "POST",
-        headers: {
-          apikey: cfg.anonKey,
-          Authorization: `Bearer ${cfg.anonKey}`,
-          "Content-Type": "application/json",
-          Prefer: primaryPrefer
-        },
-        body: JSON.stringify(payloadCamel)
-      });
-    }
-  }
-  if (res.ok) {
-    const rows = await res.json().catch(() => []);
-    const cloudId = Array.isArray(rows) ? rows[0]?.id : null;
-    if (!useIdUpsert && cloudId) {
-      entry.id = cloudId;
-      saveLocalScheduledTest(entry);
-    }
-    return true;
-  }
-  const upsertError = firstErrorText || (await res.text().catch(() => ""));
-  const insertRes = await fetch(insertUrl, {
+  delete payloadSnake.id;
+  delete payloadCamel.id;
+  let res = await fetch(insertUrl, {
     method: "POST",
     headers: {
       apikey: cfg.anonKey,
@@ -1263,13 +1220,12 @@ async function uploadScheduledTestToCloud(data, entry) {
     },
     body: JSON.stringify(payloadSnake)
   });
-  let finalInsertRes = insertRes;
-  let insertErrText = "";
-  if (!insertRes.ok) {
-    insertErrText = await insertRes.text().catch(() => "");
-    const needCamelRetry = insertErrText.includes("Could not find the 'calendar_date' column");
+  let firstErrorText = "";
+  if (!res.ok) {
+    firstErrorText = await res.text().catch(() => "");
+    const needCamelRetry = firstErrorText.includes("Could not find the 'calendar_date' column");
     if (needCamelRetry) {
-      finalInsertRes = await fetch(insertUrl, {
+      res = await fetch(insertUrl, {
         method: "POST",
         headers: {
           apikey: cfg.anonKey,
@@ -1281,16 +1237,17 @@ async function uploadScheduledTestToCloud(data, entry) {
       });
     }
   }
-  if (finalInsertRes.ok) {
-    const rows = await finalInsertRes.json().catch(() => []);
+  if (res.ok) {
+    const rows = await res.json().catch(() => []);
     const cloudId = Array.isArray(rows) ? rows[0]?.id : null;
-    if (cloudId && !isUuid(entry.id)) {
+    if (cloudId != null) {
       entry.id = cloudId;
       saveLocalScheduledTest(entry);
     }
     return true;
   }
-  const insertError = insertErrText || (await finalInsertRes.text().catch(() => ""));
+  const upsertError = firstErrorText || (await res.text().catch(() => ""));
+  const insertError = upsertError;
   const bigintIdError =
     (upsertError && upsertError.includes("invalid input syntax for type bigint")) ||
     (insertError && insertError.includes("invalid input syntax for type bigint"));
@@ -1337,7 +1294,7 @@ async function uploadScheduledTestToCloud(data, entry) {
   console.error("cloudSchedule upload failed", {
     upsertStatus: res.status,
     upsertError,
-    insertStatus: finalInsertRes.status,
+    insertStatus: res.status,
     insertError
   });
   return false;
