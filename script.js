@@ -703,6 +703,10 @@ function loginEquals(a, b) {
   return String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
 }
 
+function sameId(a, b) {
+  return String(a ?? "") === String(b ?? "");
+}
+
 function getUsers() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.users);
@@ -1384,7 +1388,7 @@ function getTestResultsList() {
 
 function saveLocalTestResult(entry) {
   const list = getTestResultsList();
-  const idx = list.findIndex((x) => x.scheduleId === entry.scheduleId && x.studentLogin === entry.studentLogin);
+  const idx = list.findIndex((x) => sameId(x.scheduleId, entry.scheduleId) && loginEquals(x.studentLogin, entry.studentLogin));
   if (idx >= 0) list[idx] = { ...list[idx], ...entry };
   else list.push(entry);
   localStorage.setItem(STORAGE_KEYS.testResults, JSON.stringify(list));
@@ -1520,7 +1524,7 @@ async function saveTestResult(data, entry) {
 }
 
 function getResultByScheduleAndLogin(scheduleId, login) {
-  return getTestResultsList().find((r) => r.scheduleId === scheduleId && r.studentLogin === login);
+  return getTestResultsList().find((r) => sameId(r.scheduleId, scheduleId) && loginEquals(r.studentLogin, login));
 }
 
 // breakdown
@@ -1860,11 +1864,11 @@ function renderAdminDashboard(data) {
 function renderAdminResultDetailPage(data, scheduleId, studentLogin) {
   const rp = data.resultsPage ?? {};
   const sc = data.studentCabinet ?? {};
-  const result = getTestResultsList().find((r) => r.scheduleId === scheduleId && r.studentLogin === studentLogin);
+  const result = getTestResultsList().find((r) => sameId(r.scheduleId, scheduleId) && loginEquals(r.studentLogin, studentLogin));
   if (!result) {
     return `<div class="admin-page fade-in"><p class="hero-subtitle">${t(rp.resultNotFound ?? { kz: "Нәтиже табылмады.", ru: "Результат не найден." })}</p><p><a class="btn btn-primary" href="#/admin/results">${t(rp.backToList ?? { kz: "Тізімге", ru: "К списку" })}</a></p></div>`;
   }
-  const schedule = getScheduledTests().find((s) => s.id === scheduleId);
+  const schedule = getScheduledTests().find((s) => sameId(s.id, scheduleId));
   const dateLine = schedule?.calendarDate ? `${state.lang === "kz" ? "Күні: " : "Дата: "}${escapeHtml(schedule.calendarDate)}` : "";
   return `<div class="admin-page fade-in"><a class="student-test-back" href="#/admin/results">${t(rp.backToList ?? { kz: "← Қорытындылар", ru: "← К результатам" })}</a><h1 class="admin-page-title">${escapeHtml(result.fullName)}</h1><p class="hero-subtitle"><code>${escapeHtml(result.studentLogin)}</code>${dateLine ? ` · ${dateLine}` : ""}</p><p class="student-result-score">${t(sc.scoreLabel)}: <strong>${result.score}/${result.maxScore}</strong></p><p class="hero-subtitle muted">${escapeHtml(formatIsoDate(result.submittedAt))}</p><h2 class="student-tests-heading">${t(rp.detailAnswersHeading ?? { kz: "Жауаптар", ru: "Ответы по вопросам" })}</h2>${renderInformaticsResultBreakdownHTML(result, data)}${renderInformaticsTopicMasteryAdminHTML(result, data)}</div>`;
 }
@@ -1927,7 +1931,7 @@ function renderStudentDashboardContent(data) {
 function renderStudentTestPage(data, scheduleId) {
   const sc = data.studentCabinet ?? {};
   const user = state.currentUser;
-  const schedule = getScheduledTests().find((s) => s.id === scheduleId);
+  const schedule = getScheduledTests().find((s) => sameId(s.id, scheduleId));
   if (!schedule) {
     return `<div class="admin-page fade-in"><p class="hero-subtitle">${t(sc.testNotFound)}</p><p><a class="btn btn-primary" href="#/student">${t(sc.back)}</a></p></div>`;
   }
