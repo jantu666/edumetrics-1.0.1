@@ -646,6 +646,20 @@ function createSessionId() {
   return `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function createUuid() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  const tpl = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+  return tpl.replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16);
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
 function parseRoute() {
   const raw = window.location.hash.replace(/^#/, "") || "/";
   return raw.startsWith("/") ? raw : `/${raw}`;
@@ -1160,10 +1174,10 @@ function normalizeCloudScheduledRow(row) {
 async function uploadScheduledTestToCloud(data, entry) {
   const cfg = getCloudScheduleConfig(data);
   if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) return false;
+  const useIdUpsert = isUuid(entry?.id);
   const upsertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=id`;
   const insertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}`;
   const payload = {
-    id: entry.id,
     created_at: entry.createdAt,
     calendar_date: entry.calendarDate,
     test_type: entry.testType,
@@ -1179,17 +1193,28 @@ async function uploadScheduledTestToCloud(data, entry) {
     duration_hours: entry.durationHours,
     auto_seed: entry.autoSeed
   };
-  const res = await fetch(upsertUrl, {
+  if (useIdUpsert) payload.id = entry.id;
+  const primaryUrl = useIdUpsert ? upsertUrl : insertUrl;
+  const primaryPrefer = useIdUpsert ? "resolution=merge-duplicates,return=representation" : "return=representation";
+  const res = await fetch(primaryUrl, {
     method: "POST",
     headers: {
       apikey: cfg.anonKey,
       Authorization: `Bearer ${cfg.anonKey}`,
       "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=minimal"
+      Prefer: primaryPrefer
     },
     body: JSON.stringify(payload)
   });
-  if (res.ok) return true;
+  if (res.ok) {
+    const rows = await res.json().catch(() => []);
+    const cloudId = Array.isArray(rows) ? rows[0]?.id : null;
+    if (!useIdUpsert && cloudId) {
+      entry.id = cloudId;
+      saveLocalScheduledTest(entry);
+    }
+    return true;
+  }
   const upsertError = await res.text().catch(() => "");
   const insertRes = await fetch(insertUrl, {
     method: "POST",
@@ -1197,11 +1222,19 @@ async function uploadScheduledTestToCloud(data, entry) {
       apikey: cfg.anonKey,
       Authorization: `Bearer ${cfg.anonKey}`,
       "Content-Type": "application/json",
-      Prefer: "return=minimal"
+      Prefer: "return=representation"
     },
     body: JSON.stringify(payload)
   });
-  if (insertRes.ok) return true;
+  if (insertRes.ok) {
+    const rows = await insertRes.json().catch(() => []);
+    const cloudId = Array.isArray(rows) ? rows[0]?.id : null;
+    if (cloudId && !isUuid(entry.id)) {
+      entry.id = cloudId;
+      saveLocalScheduledTest(entry);
+    }
+    return true;
+  }
   const insertError = await insertRes.text().catch(() => "");
   console.error("cloudSchedule upload failed", {
     upsertStatus: res.status,
@@ -2356,7 +2389,7 @@ function attachEvents(data) {
       filteredStuds.length === state.scheduleDraft.selectedStudentLogins.length &&
       filteredStuds.every((u) => state.scheduleDraft.selectedStudentLogins.includes(u.login));
     const entry = {
-      id: createSessionId(),
+      id: createUuid(),
       createdAt: new Date().toISOString(),
       calendarDate: state.scheduleSelectedDate,
       testType: String(fd.get("testType") || "subject"),
