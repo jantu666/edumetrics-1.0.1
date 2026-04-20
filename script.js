@@ -4,7 +4,6 @@ const STORAGE_KEYS = {
   users: "edumetrics:users",
   user: "edumetrics:user",
   apiKey: "edumetrics:apiKey",
-  savedTests: "edumetrics:savedTests",
   scheduledTests: "edumetrics:scheduledTests",
   testResults: "edumetrics:testResults",
   cloudResultsCache: "edumetrics:cloudResultsCache",
@@ -556,26 +555,6 @@ function mergeScheduleTest(partial) {
   return merged;
 }
 
-const DEFAULT_TEST_BUILDER = {
-  title: { kz: "Тест құрастыру", ru: "Создание теста" },
-  subtitle: {
-    kz: "Тақырып пен сұрақтар санын көрсетіңіз (демо нұсқа).",
-    ru: "Укажите название и количество вопросов (демо-версия)."
-  },
-  fields: {
-    title: { kz: "Тест атауы", ru: "Название теста" },
-    subject: { kz: "Пән", ru: "Предмет" },
-    questions: { kz: "Сұрақтар саны", ru: "Количество вопросов" },
-    duration: { kz: "Уақыт (мин)", ru: "Время (мин)" }
-  },
-  submit: { kz: "Сақтау", ru: "Сохранить" }
-};
-
-function mergeTestBuilder(partial) {
-  const o = partial && typeof partial === "object" ? partial : {};
-  return { ...DEFAULT_TEST_BUILDER, ...o, fields: { ...DEFAULT_TEST_BUILDER.fields, ...(o.fields || {}) } };
-}
-
 const DEFAULT_ACCOUNTS_PAGE = {
   title: { kz: "Оқушылар құрамы", ru: "Состав учащихся" },
   exportExcel: { kz: "Excel", ru: "Excel" },
@@ -619,7 +598,6 @@ function normalizeAppData(data) {
   if (!data || typeof data !== "object") return;
   data.site = mergeSite(data.site);
   data.scheduleTest = mergeScheduleTest(data.scheduleTest);
-  data.testBuilder = mergeTestBuilder(data.testBuilder);
   data.accountsPage = mergeAccountsPage(data.accountsPage);
   if (data.header && typeof data.header === "object") {
     data.header.menu = [];
@@ -1004,7 +982,12 @@ function renderHeader(data) {
       : state.themeMode === "dark"
         ? "Переключить на светлую тему"
         : "Переключить на тёмную тему";
-  return `<header class="topbar"><div class="container"><div class="header-inner"><div class="header-row"><a class="logo" href="#/" data-action="logo"><span class="logo-badge" aria-hidden="true"></span><span>${t(data.header.logo)}</span></a>${hideMainNav ? "" : `<button class="burger" type="button" aria-label="Menu" aria-expanded="${state.mobileMenuOpen ? "true" : "false"}" data-burger><span class="burger-lines" aria-hidden="true"><span></span><span></span><span></span></span></button>`}</div><nav class="${navClass}" aria-label="Main navigation">${menuHtml}</nav><div class="actions">${actions}<button class="btn btn-ghost btn-theme-toggle" type="button" data-theme-toggle aria-label="${escapeAttr(themeAria)}" title="${escapeAttr(themeAria)}">${themeIcon}</button><button class="btn btn-ghost" type="button" data-lang-toggle>${t(data.header.languageToggle?.label ?? { kz: "Рус", ru: "Қаз" })}</button>${userBtn}</div></div></div></header>`;
+  const logoAlt = escapeAttr(t(data.header.logo));
+  const logoImage = data.header?.logoImage
+    ? `<img class="logo-image" src="${escapeAttr(data.header.logoImage)}" alt="${logoAlt}" loading="eager" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" />`
+    : "";
+  const logoBadge = `<span class="logo-badge ${data.header?.logoImage ? "logo-badge--fallback" : ""}" aria-hidden="true"></span>`;
+  return `<header class="topbar"><div class="container"><div class="header-inner"><div class="header-row"><a class="logo" href="#/" data-action="logo">${logoImage}${logoBadge}<span>${t(data.header.logo)}</span></a>${hideMainNav ? "" : `<button class="burger" type="button" aria-label="Menu" aria-expanded="${state.mobileMenuOpen ? "true" : "false"}" data-burger><span class="burger-lines" aria-hidden="true"><span></span><span></span><span></span></span></button>`}</div><nav class="${navClass}" aria-label="Main navigation">${menuHtml}</nav><div class="actions">${actions}<button class="btn btn-ghost btn-theme-toggle" type="button" data-theme-toggle aria-label="${escapeAttr(themeAria)}" title="${escapeAttr(themeAria)}">${themeIcon}</button><button class="btn btn-ghost" type="button" data-lang-toggle>${t(data.header.languageToggle?.label ?? { kz: "Рус", ru: "Қаз" })}</button>${userBtn}</div></div></div></header>`;
 }
 
 function renderHero(data) {
@@ -1077,7 +1060,12 @@ function parseAdminRoute(path) {
 
 function renderAdminSidebar(data, active) {
   const items = data.adminCabinet?.sidebar ?? [];
-  return `<aside class="admin-sidebar"><div class="admin-sidebar-brand"><span class="logo-badge"></span><span>${escapeHtml(data.site?.name ?? "EduMetrics.com")}</span></div><nav class="admin-nav">${items
+  const logoAlt = escapeAttr(data.site?.name ?? "EduMetrics.com");
+  const logoImage = data.header?.logoImage
+    ? `<img class="logo-image logo-image--sidebar" src="${escapeAttr(data.header.logoImage)}" alt="${logoAlt}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" />`
+    : "";
+  const logoBadge = `<span class="logo-badge ${data.header?.logoImage ? "logo-badge--fallback" : ""}"></span>`;
+  return `<aside class="admin-sidebar"><div class="admin-sidebar-brand">${logoImage}${logoBadge}<span>${escapeHtml(data.site?.name ?? "EduMetrics.com")}</span></div><nav class="admin-nav">${items
     .map((item) => {
       const href = item.id === "dashboard" ? "#/admin" : `#/admin/${item.id}`;
       const isActive = item.id === active || (active === "dashboard" && item.id === "dashboard");
@@ -1509,11 +1497,6 @@ function renderScheduledAdminPage(data) {
   }</div>`;
 }
 
-function renderTestBuilderPage(data) {
-  const tb = data.testBuilder ?? {};
-  return `<div class="admin-page fade-in"><h1 class="admin-page-title">${t(tb.title)}</h1><p class="hero-subtitle">${t(tb.subtitle)}</p><form class="test-builder-form" data-test-builder-form><input class="input" name="title" placeholder="${t(tb.fields?.title)}" required /><input class="input" name="subject" placeholder="${t(tb.fields?.subject)}" required /><input class="input" name="questions" type="number" min="1" value="10" placeholder="${t(tb.fields?.questions)}" /><input class="input" name="duration" type="number" min="5" value="45" placeholder="${t(tb.fields?.duration)}" /><button class="btn btn-primary" type="submit">${t(tb.submit)}</button></form><div id="savedTests" class="saved-tests"></div></div>`;
-}
-
 function getStudentUsers() {
   return getUsers().filter((u) => u.role === "student");
 }
@@ -1594,7 +1577,7 @@ function renderResultsPage(data) {
 
 function renderAdminDashboard(data) {
   const ac = data.adminCabinet ?? {};
-  return `<div class="admin-page fade-in"><div class="admin-profile"><div class="admin-avatar"></div><div><div class="admin-org">${t(ac.orgLabel)}</div><h2 class="admin-school">${t(ac.schoolName)}</h2></div></div><div class="dashboard-cards"><a class="dashboard-card" href="#/admin/schedule"><h3>${t({ kz: "Тестті жоспарлау", ru: "Планирование теста" })}</h3></a><a class="dashboard-card" href="#/admin/scheduled"><h3>${t({ kz: "Жоспарланған тесттер", ru: "Запланированные тесты" })}</h3></a><a class="dashboard-card" href="#/admin/testBuilder"><h3>${t({ kz: "Тест құрастырушы", ru: "Конструктор тестов" })}</h3></a><a class="dashboard-card" href="#/admin/accounts"><h3>${t({ kz: "Оқушылар", ru: "Учащиеся" })}</h3></a><a class="dashboard-card" href="#/admin/results"><h3>${t({ kz: "Қорытындылар", ru: "Результаты" })}</h3></a></div></div>`;
+  return `<div class="admin-page fade-in"><div class="admin-profile"><div class="admin-avatar"></div><div><div class="admin-org">${t(ac.orgLabel)}</div><h2 class="admin-school">${t(ac.schoolName)}</h2></div></div><div class="dashboard-cards"><a class="dashboard-card" href="#/admin/schedule"><h3>${t({ kz: "Тестті жоспарлау", ru: "Планирование теста" })}</h3></a><a class="dashboard-card" href="#/admin/scheduled"><h3>${t({ kz: "Жоспарланған тесттер", ru: "Запланированные тесты" })}</h3></a><a class="dashboard-card" href="#/admin/accounts"><h3>${t({ kz: "Оқушылар", ru: "Учащиеся" })}</h3></a><a class="dashboard-card" href="#/admin/results"><h3>${t({ kz: "Қорытындылар", ru: "Результаты" })}</h3></a></div></div>`;
 }
 
 function renderAdminResultDetailPage(data, scheduleId, studentLogin) {
@@ -1618,8 +1601,6 @@ function renderAdminMain(data, section, resultDetail) {
       return renderSchedulePage(data);
     case "scheduled":
       return renderScheduledAdminPage(data);
-    case "testBuilder":
-      return renderTestBuilderPage(data);
     case "accounts":
       return renderAccountsPage(data);
     case "results":
@@ -2214,29 +2195,6 @@ function attachEvents(data) {
       "success",
       3200
     );
-    renderApp(data);
-  });
-
-  document.querySelector("[data-test-builder-form]")?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const entry = {
-      title: String(fd.get("title")),
-      subject: String(fd.get("subject")),
-      questions: Number(fd.get("questions")),
-      duration: Number(fd.get("duration")),
-      at: new Date().toISOString()
-    };
-    let list = [];
-    try {
-      list = JSON.parse(localStorage.getItem(STORAGE_KEYS.savedTests) || "[]");
-    } catch {
-      list = [];
-    }
-    list.push(entry);
-    localStorage.setItem(STORAGE_KEYS.savedTests, JSON.stringify(list));
-    alert(state.lang === "kz" ? "Тест сақталды!" : "Тест сохранён!");
-    e.currentTarget.reset();
     renderApp(data);
   });
 

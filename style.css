@@ -529,6 +529,24 @@ a {
   box-shadow: 0 12px 24px rgba(0, 175, 202, 0.3);
 }
 
+.logo-badge--fallback {
+  display: none;
+}
+
+.logo-image {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 12px 24px rgba(0, 175, 202, 0.25);
+  border: 2px solid rgba(243, 198, 77, 0.75);
+}
+
+.logo-image--sidebar {
+  width: 30px;
+  height: 30px;
+}
+
 .nav {
   display: flex;
   align-items: center;
