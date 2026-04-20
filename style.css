@@ -1,3 +1,4 @@
+/* by jantu */
 :root {
   --primary: #00afca;
   --secondary: #edf9ff;
@@ -78,7 +79,7 @@ body {
   box-shadow: 0 14px 32px rgba(0, 175, 202, 0.28), 0 0 24px rgba(0, 175, 202, 0.18);
 }
 
-/* Admin login «Жеке кабинет»: тёмная тема не должна перетирать #FF8C00 */
+/* admin */
 :root[data-theme="dark"] .btn.btn-cabinet-admin {
   background: #ff8c00;
   color: #fff;
@@ -154,7 +155,7 @@ body {
   background: var(--secondary);
 }
 
-/* Таблицы: явные фон и цвет (inline --secondary из темы раньше ломал контраст) */
+/* table */
 :root[data-theme="dark"] .data-table th {
   background: #0f1728;
   color: rgba(230, 234, 243, 0.95);
@@ -289,7 +290,7 @@ body {
   background: rgba(243, 198, 77, 0.14);
 }
 
-/* Chat (AI tutor): dark window + readable placeholders */
+/* chat */
 :root[data-theme="dark"] .chat-window {
   background: #0d1527;
   border-color: rgba(166, 177, 210, 0.22);
@@ -323,7 +324,7 @@ body {
   box-shadow: 0 12px 28px rgba(0, 175, 202, 0.35);
 }
 
-/* Footer: dark strip + readable title and pills */
+/* footer */
 :root[data-theme="dark"] .footer {
   background: linear-gradient(180deg, #0a0f1c 0%, #0d1527 100%);
   border-top-color: rgba(166, 177, 210, 0.18);
@@ -355,7 +356,7 @@ body {
   border-color: rgba(243, 198, 77, 0.45);
 }
 
-/* Admin shell background in dark mode */
+/* shell */
 :root[data-theme="dark"] .admin-layout {
   background: linear-gradient(180deg, #0a0f1c 0%, #0b1020 45%);
 }
@@ -372,7 +373,7 @@ body {
   background: rgba(243, 198, 77, 0.12);
 }
 
-/* Auth modal dark */
+/* modal */
 :root[data-theme="dark"] .auth-modal-dialog {
   background: var(--card);
   color: var(--text);
@@ -628,7 +629,7 @@ a {
   box-shadow: none;
 }
 
-/* Outline / ghost: same gradient + glow as «Личный кабинет» on hover */
+/* hover */
 .btn:not(.btn-primary):not(:disabled):hover,
 .btn:not(.btn-primary):not(:disabled):focus-visible {
   transform: translateY(-1px);
@@ -1221,7 +1222,7 @@ a {
   margin-top: 10px;
 }
 
-/* Admin cabinet */
+/* cabinet */
 .admin-layout {
   background: linear-gradient(180deg, #fbfbff 0%, #fff 40%);
   padding-bottom: 32px;
@@ -2466,7 +2467,7 @@ a {
   color: var(--text);
 }
 
-/* Mobile */
+/* mobile */
 @media (max-width: 920px) {
   .hero-grid {
     grid-template-columns: 1fr;

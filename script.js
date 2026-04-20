@@ -1,4 +1,5 @@
-﻿const STORAGE_KEYS = {
+﻿// by jantu
+const STORAGE_KEYS = {
   data: "edumetrics:data",
   users: "edumetrics:users",
   user: "edumetrics:user",
@@ -10,7 +11,7 @@
   themeMode: "edumetrics:themeMode"
 };
 
-/** Демо-ученики (seed) — тот же список, что в seedDemoStudents. */
+// seeds
 const BASE_DEMO_STUDENT_SEEDS = [
   {
     fullName: "Аккаунт Тестировщика",
@@ -22,7 +23,7 @@ const BASE_DEMO_STUDENT_SEEDS = [
   }
 ];
 
-/** Ученики из Excel (login: stu001.., password: 123001..). */
+// excel
 const EXCEL_STUDENT_ROWS = [
   { fullName: "\u0413\u0430\u043b\u044b\u043c\u0436\u0430\u043d \u0411\u0430\u044f\u0437\u0438\u0442 \u0415\u0440\u0431\u043e\u043b\u0443\u043b\u044b", grade: "5" },
   { fullName: "\u0416\u0443\u0441\u0443\u043f\u043e\u0432\u0430 \u0416\u0430\u043d\u0435\u043b\u044c \u041a\u0430\u0437\u044b\u0431\u0435\u043a\u043e\u0432\u043d\u0430", grade: "5" },
@@ -109,7 +110,7 @@ const SCHOOL_PHOTO_URLS = [
   "img/school-4.jpg"
 ];
 
-/** 25 школьных вопросов по информатике (автопроверка). topic — тема для отчёта «повторить / усвоение». */
+// questions
 const INFORMATICS_QUESTIONS = [
   {
     topicKey: "hardware",
@@ -447,9 +448,9 @@ const state = {
   mobileMenuOpen: false,
   openDropdownIndex: null,
   cabinetMenuOpen: false,
-  /** @type {null | "login"} */
+  // type
   authModal: null,
-  /** @type {null | { id: string, message: string, variant: "success" | "error" | "info" }} */
+  // type
   toast: null,
   toastSeq: 0,
   currentUser: null,
@@ -468,10 +469,10 @@ const state = {
   scheduleFormErrors: {}
 };
 
-/** "landing" | "admin" | "student" — used to reset chat when returning to the main page from a cabinet. */
+// shell
 let lastAppShell = null;
 
-/** Merged with cached/partial data so file:// localStorage never drops labels, duration options, or buttons. */
+// defaults
 const DEFAULT_SCHEDULE_TEST = {
   title: { kz: "Тестті жоспарлаңыз", ru: "Запланируйте тест" },
   testTypePlaceholder: { kz: "Тест түрі", ru: "Тип теста" },
@@ -627,7 +628,7 @@ function restorePreferredLang() {
     const L = localStorage.getItem(STORAGE_KEYS.lang);
     if (L === "ru" || L === "kz") state.lang = L;
   } catch {
-    /* ignore */
+    /* skip */
   }
 }
 
@@ -635,7 +636,7 @@ function savePreferredLang() {
   try {
     localStorage.setItem(STORAGE_KEYS.lang, state.lang);
   } catch {
-    /* ignore */
+    /* skip */
   }
 }
 
@@ -644,7 +645,7 @@ function restorePreferredThemeMode() {
     const v = localStorage.getItem(STORAGE_KEYS.themeMode);
     if (v === "light" || v === "dark") state.themeMode = v;
   } catch {
-    /* ignore */
+    /* skip */
   }
 }
 
@@ -652,7 +653,7 @@ function savePreferredThemeMode() {
   try {
     localStorage.setItem(STORAGE_KEYS.themeMode, state.themeMode);
   } catch {
-    /* ignore */
+    /* skip */
   }
 }
 
@@ -682,7 +683,7 @@ function setTheme(theme) {
   const root = document.documentElement;
   const t = theme || {};
   if (t.primaryColor) root.style.setProperty("--primary", t.primaryColor);
-  /* Inline --secondary из data.json перебивает палитру [data-theme="dark"] в CSS — таблицы и блоки остаются светлыми. */
+  /* theme */
   if (state.themeMode === "dark") {
     root.style.removeProperty("--secondary");
   } else if (t.secondaryColor) {
@@ -737,7 +738,7 @@ function seedDefaultAdmin() {
   saveUsers(users);
 }
 
-/** Если тест запланировали до появления нового демо-ученика, добавляем его в studentLogins (тот же класс, информатика). */
+// sync
 function syncDemoStudentsIntoScheduledTests() {
   let arr = [];
   try {
@@ -773,7 +774,7 @@ function syncDemoStudentsIntoScheduledTests() {
     try {
       localStorage.setItem(STORAGE_KEYS.scheduledTests, JSON.stringify(arr));
     } catch {
-      /* ignore */
+      /* skip */
     }
   }
 }
@@ -837,10 +838,7 @@ function cleanupRemovedDemoStudents() {
   if (nextUsers.length !== users.length) saveUsers(nextUsers);
 }
 
-/**
- * Гарантирует «демо-тест для всех»: чтобы любой ученик при входе видел хотя бы один запланированный тест.
- * Обновляет аудиторию по текущим аккаунтам учеников (без дублей).
- */
+// autoschedule
 function ensureAutoScheduledTestForAllStudents() {
   const students = getUsers().filter((u) => u.role === "student");
   if (!students.length) return;
@@ -880,7 +878,7 @@ function ensureAutoScheduledTestForAllStudents() {
   try {
     localStorage.setItem(STORAGE_KEYS.scheduledTests, JSON.stringify(arr));
   } catch {
-    /* ignore */
+    /* skip */
   }
 }
 
@@ -1147,7 +1145,7 @@ function getResultByScheduleAndLogin(scheduleId, login) {
   return getTestResultsList().find((r) => r.scheduleId === scheduleId && r.studentLogin === login);
 }
 
-/** HTML: разбор ответов по вопросам (информатика). `result.answers` — массив { selected, correct }. */
+// breakdown
 function renderInformaticsResultBreakdownHTML(result, data) {
   const sc = data.studentCabinet ?? {};
   const answers = result?.answers;
@@ -1169,7 +1167,7 @@ function renderInformaticsResultBreakdownHTML(result, data) {
   }).join("")}</div>`;
 }
 
-/** Агрегация по topicKey: сколько верно/неверно по каждой школьной теме. */
+// report
 function computeInformaticsTopicReport(result) {
   const answers = result?.answers;
   if (!Array.isArray(answers) || answers.length !== INFORMATICS_QUESTIONS.length) return null;
@@ -1194,7 +1192,7 @@ function computeInformaticsTopicReport(result) {
   return { rows, toRepeat };
 }
 
-/** Ученику: какие темы повторить (после разбора по вопросам). */
+// repeat
 function renderInformaticsTopicsRepeatHTML(result, data) {
   const rep = computeInformaticsTopicReport(result);
   if (!rep) return "";
@@ -1223,7 +1221,7 @@ function renderInformaticsTopicsRepeatHTML(result, data) {
   return `<div class="topic-repeat-block"><h2 class="student-tests-heading">${h}</h2><ul class="topic-repeat-list">${items}</ul></div>`;
 }
 
-/** Админу: по темам — знает / есть ошибки и доля верных внутри темы. */
+// mastery
 function renderInformaticsTopicMasteryAdminHTML(result, data) {
   const rep = computeInformaticsTopicReport(result);
   if (!rep) return "";
@@ -1265,7 +1263,7 @@ function scheduleGradeLabel(grade) {
   return `${grade} ${state.lang === "kz" ? "сынып" : "класс"}`;
 }
 
-/** Модальное окно: тест информатики так же, как у ученика (без сохранения). */
+// preview
 function renderScheduleTestPreviewModal(data) {
   if (!state.scheduleTestPreviewOpen) return "";
   const sc = data.studentCabinet ?? {};
