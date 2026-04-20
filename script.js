@@ -2086,7 +2086,6 @@ async function sendChatMessage(data, message) {
     if (isSupabaseFn) {
       if (key) {
         headers.apikey = key;
-        headers.Authorization = `Bearer ${key}`;
       }
     } else if (key) {
       headers.Authorization = `Bearer ${key}`;
