@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   savedTests: "edumetrics:savedTests",
   scheduledTests: "edumetrics:scheduledTests",
   testResults: "edumetrics:testResults",
+  cloudResultsCache: "edumetrics:cloudResultsCache",
   lang: "edumetrics:lang",
   themeMode: "edumetrics:themeMode"
 };
@@ -466,7 +467,9 @@ const state = {
   },
   scheduleTestPreviewOpen: false,
   scheduleStartTime: "09:00",
-  scheduleFormErrors: {}
+  scheduleFormErrors: {},
+  cloudResults: [],
+  cloudLoaded: false
 };
 
 // shell
@@ -1127,6 +1130,7 @@ function getScheduledTests() {
 }
 
 function getTestResultsList() {
+  if (state.cloudLoaded) return Array.isArray(state.cloudResults) ? state.cloudResults : [];
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEYS.testResults) || "[]");
   } catch {
@@ -1134,11 +1138,120 @@ function getTestResultsList() {
   }
 }
 
-function saveTestResult(entry) {
+function saveLocalTestResult(entry) {
   const list = getTestResultsList();
-  if (list.some((x) => x.scheduleId === entry.scheduleId && x.studentLogin === entry.studentLogin)) return;
-  list.push(entry);
+  const idx = list.findIndex((x) => x.scheduleId === entry.scheduleId && x.studentLogin === entry.studentLogin);
+  if (idx >= 0) list[idx] = { ...list[idx], ...entry };
+  else list.push(entry);
   localStorage.setItem(STORAGE_KEYS.testResults, JSON.stringify(list));
+}
+
+function getCloudResultsConfig(data) {
+  const cfg = data?.cloudResults || {};
+  const provider = String(cfg.provider || "").toLowerCase();
+  const enabled = Boolean(cfg.enabled) && provider === "supabase";
+  const baseUrl = String(cfg.baseUrl || "").replace(/\/+$/, "");
+  const anonKey = String(cfg.anonKey || "");
+  const table = String(cfg.table || "test_results");
+  return { enabled, provider, baseUrl, anonKey, table };
+}
+
+function normalizeCloudResultRow(row) {
+  return {
+    scheduleId: row.schedule_id ?? row.scheduleId ?? "",
+    studentLogin: row.student_login ?? row.studentLogin ?? "",
+    fullName: row.full_name ?? row.fullName ?? "",
+    score: Number(row.score ?? 0),
+    maxScore: Number(row.max_score ?? row.maxScore ?? 0),
+    submittedAt: row.submitted_at ?? row.submittedAt ?? new Date().toISOString(),
+    answers: Array.isArray(row.answers) ? row.answers : []
+  };
+}
+
+async function uploadResultToCloud(data, entry) {
+  const cfg = getCloudResultsConfig(data);
+  if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) return false;
+  const url = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=schedule_id,student_login`;
+  const payload = {
+    schedule_id: entry.scheduleId,
+    student_login: entry.studentLogin,
+    full_name: entry.fullName,
+    score: entry.score,
+    max_score: entry.maxScore,
+    submitted_at: entry.submittedAt,
+    answers: entry.answers
+  };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      apikey: cfg.anonKey,
+      Authorization: `Bearer ${cfg.anonKey}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=minimal"
+    },
+    body: JSON.stringify(payload)
+  });
+  return res.ok;
+}
+
+async function refreshResultsFromCloud(data) {
+  const cfg = getCloudResultsConfig(data);
+  if (!cfg.enabled || !cfg.baseUrl || !cfg.anonKey) {
+    state.cloudLoaded = false;
+    return false;
+  }
+  const url = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?select=*&order=submitted_at.desc`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: cfg.anonKey,
+      Authorization: `Bearer ${cfg.anonKey}`
+    }
+  });
+  if (!res.ok) return false;
+  const rows = await res.json();
+  const normalized = Array.isArray(rows)
+    ? rows
+        .map(normalizeCloudResultRow)
+        .filter((r) => r.scheduleId && r.studentLogin)
+    : [];
+  state.cloudResults = normalized;
+  state.cloudLoaded = true;
+  try {
+    localStorage.setItem(STORAGE_KEYS.cloudResultsCache, JSON.stringify(normalized));
+  } catch {
+    /* skip */
+  }
+  return true;
+}
+
+function restoreCloudResultsCache() {
+  try {
+    const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.cloudResultsCache) || "[]");
+    if (Array.isArray(list) && list.length) {
+      state.cloudResults = list;
+      state.cloudLoaded = true;
+    }
+  } catch {
+    /* skip */
+  }
+}
+
+async function saveTestResult(data, entry) {
+  saveLocalTestResult(entry);
+  let cloudOk = false;
+  try {
+    cloudOk = await uploadResultToCloud(data, entry);
+  } catch {
+    cloudOk = false;
+  }
+  if (cloudOk) {
+    await refreshResultsFromCloud(data);
+  } else {
+    const local = getTestResultsList();
+    state.cloudResults = local;
+    state.cloudLoaded = true;
+  }
+  return cloudOk;
 }
 
 function getResultByScheduleAndLogin(scheduleId, login) {
@@ -1457,8 +1570,17 @@ function renderResultsPage(data) {
     })
     .join("");
   const rows = stored.length ? storedRows : demoRows;
+  const cloudEnabled = getCloudResultsConfig(data).enabled;
   const notice = stored.length
-    ? `<p class="results-storage-note">${state.lang === "kz" ? "Кесте: информатика тестінің нақты нәтижелері (localStorage)." : "Таблица: реальные результаты теста по информатике (localStorage)."}</p>`
+    ? `<p class="results-storage-note">${
+        cloudEnabled
+          ? state.lang === "kz"
+            ? "Кесте: бұлттан жүктелген нақты нәтижелер."
+            : "Таблица: реальные результаты, загруженные из облака."
+          : state.lang === "kz"
+            ? "Кесте: информатика тестінің нақты нәтижелері (localStorage)."
+            : "Таблица: реальные результаты теста по информатике (localStorage)."
+      }</p>`
     : "";
   return `<div class="admin-page fade-in results-page"><div class="results-meta"><h1 class="results-meta-title">${t(rp.title)}</h1><div class="results-meta-sub">${t(rp.school)}</div><div class="results-meta-line"><span class="badge-grade">${t(rp.gradeLine)}</span></div><p class="results-meta-desc">${t(rp.details)}</p><p class="results-meta-time">🕐 ${escapeHtml(rp.scheduledAt)}</p></div>${notice}<div class="results-tabs">${tabs}</div><div class="table-wrap"><table class="data-table results-table"><thead><tr>
     <th>${t(rp.columns?.name)}</th>
@@ -1857,7 +1979,7 @@ function attachEvents(data) {
     })
   );
 
-  document.querySelector("[data-login-form]")?.addEventListener("submit", (e) => {
+  document.querySelector("[data-login-form]")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
     const login = form.login.value.trim();
@@ -1875,6 +1997,7 @@ function attachEvents(data) {
     });
     if (role === "admin") navigate("/admin");
     else navigate("/student");
+    await refreshResultsFromCloud(data);
     renderApp(data);
   });
 
@@ -1892,7 +2015,7 @@ function attachEvents(data) {
     await sendChatMessage(data, message);
   });
 
-  document.querySelector("[data-student-test-form]")?.addEventListener("submit", (e) => {
+  document.querySelector("[data-student-test-form]")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
     const sid = form.getAttribute("data-schedule-id");
@@ -1913,7 +2036,7 @@ function attachEvents(data) {
       if (v != null && !Number.isNaN(v) && v === q.correct) score++;
     });
     const maxScore = INFORMATICS_QUESTIONS.length;
-    saveTestResult({
+    const resultEntry = {
       scheduleId: sid,
       studentLogin: user.login,
       fullName: user.fullName || user.login,
@@ -1921,7 +2044,20 @@ function attachEvents(data) {
       maxScore,
       submittedAt: new Date().toISOString(),
       answers
-    });
+    };
+    const cloudOk = await saveTestResult(data, resultEntry);
+    if (cloudOk) {
+      showToast(data, state.lang === "kz" ? "Нәтиже бұлтқа сақталды." : "Результат сохранен в облако.", "success", 2400);
+    } else {
+      showToast(
+        data,
+        state.lang === "kz"
+          ? "Нәтиже локалды сақталды. Бұлт қосылымын тексеріңіз."
+          : "Результат сохранен локально. Проверьте подключение к облаку.",
+        "error",
+        3200
+      );
+    }
     navigate(`/student/test/${encodeURIComponent(sid)}`);
     renderApp(data);
   });
@@ -2228,6 +2364,7 @@ async function init() {
   ensureAutoScheduledTestForAllStudents();
   syncDemoStudentsIntoScheduledTests();
   state.currentUser = restoreSessionUser();
+  restoreCloudResultsCache();
   const dataUrl = new URL("data.json", window.location.href);
   try {
     if (window.location.protocol === "file:") {
@@ -2240,21 +2377,31 @@ async function init() {
     const data = await res.json();
     normalizeAppData(data);
     cacheData(data);
+    await refreshResultsFromCloud(data);
     renderApp(data);
   } catch {
     renderFileModeLoader();
   }
 }
 
-window.addEventListener("hashchange", () => {
+window.addEventListener("hashchange", async () => {
   const cached = loadCachedData();
-  if (cached) renderApp(cached);
+  if (cached) {
+    const path = parseRoute();
+    if (path.startsWith("/admin/results") || path.startsWith("/student")) {
+      await refreshResultsFromCloud(cached);
+    }
+    renderApp(cached);
+  }
   else if (window.location.protocol !== "file:") {
     fetch(new URL("data.json", window.location.href), { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => {
+      .then(async (d) => {
         normalizeAppData(d);
         cacheData(d);
+        if (parseRoute().startsWith("/admin/results") || parseRoute().startsWith("/student")) {
+          await refreshResultsFromCloud(d);
+        }
         renderApp(d);
       })
       .catch(() => {});

@@ -270,6 +270,13 @@
       "ru": "Ты учебный ИИ-репетитор для школьников Казахстана. Отвечай ясно, коротко и по делу."
     }
   },
+  "cloudResults": {
+    "enabled": true,
+    "provider": "supabase",
+    "baseUrl": "https://yrrpexagyksrlkbtzcev.supabase.co",
+    "anonKey": "sb_publishable_tvfRTuwa40I4pnJL-C194w_y_sKpGF4",
+    "table": "test_results"
+  },
   "footer": {
     "contactsTitle": { "kz": "Байланыс", "ru": "Контакты" },
     "contacts": {
