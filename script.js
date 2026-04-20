@@ -1177,7 +1177,7 @@ async function uploadScheduledTestToCloud(data, entry) {
   const useIdUpsert = isUuid(entry?.id);
   const upsertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}?on_conflict=id`;
   const insertUrl = `${cfg.baseUrl}/rest/v1/${encodeURIComponent(cfg.table)}`;
-  const payload = {
+  const payloadSnake = {
     created_at: entry.createdAt,
     calendar_date: entry.calendarDate,
     test_type: entry.testType,
@@ -1193,10 +1193,29 @@ async function uploadScheduledTestToCloud(data, entry) {
     duration_hours: entry.durationHours,
     auto_seed: entry.autoSeed
   };
-  if (useIdUpsert) payload.id = entry.id;
+  const payloadCamel = {
+    createdAt: entry.createdAt,
+    calendarDate: entry.calendarDate,
+    testType: entry.testType,
+    subject: entry.subject,
+    questionCount: entry.questionCount,
+    grades: entry.grades,
+    letter: entry.letter,
+    includeAllStudentsInGrades: entry.includeAllStudentsInGrades,
+    studentLogins: entry.studentLogins,
+    studentsSnapshot: entry.studentsSnapshot,
+    language: entry.language,
+    startTime: entry.startTime,
+    durationHours: entry.durationHours,
+    autoSeed: entry.autoSeed
+  };
+  if (useIdUpsert) {
+    payloadSnake.id = entry.id;
+    payloadCamel.id = entry.id;
+  }
   const primaryUrl = useIdUpsert ? upsertUrl : insertUrl;
   const primaryPrefer = useIdUpsert ? "resolution=merge-duplicates,return=representation" : "return=representation";
-  const res = await fetch(primaryUrl, {
+  let res = await fetch(primaryUrl, {
     method: "POST",
     headers: {
       apikey: cfg.anonKey,
@@ -1204,8 +1223,25 @@ async function uploadScheduledTestToCloud(data, entry) {
       "Content-Type": "application/json",
       Prefer: primaryPrefer
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payloadSnake)
   });
+  let firstErrorText = "";
+  if (!res.ok) {
+    firstErrorText = await res.text().catch(() => "");
+    const needCamelRetry = firstErrorText.includes("Could not find the 'calendar_date' column");
+    if (needCamelRetry) {
+      res = await fetch(primaryUrl, {
+        method: "POST",
+        headers: {
+          apikey: cfg.anonKey,
+          Authorization: `Bearer ${cfg.anonKey}`,
+          "Content-Type": "application/json",
+          Prefer: primaryPrefer
+        },
+        body: JSON.stringify(payloadCamel)
+      });
+    }
+  }
   if (res.ok) {
     const rows = await res.json().catch(() => []);
     const cloudId = Array.isArray(rows) ? rows[0]?.id : null;
@@ -1215,7 +1251,7 @@ async function uploadScheduledTestToCloud(data, entry) {
     }
     return true;
   }
-  const upsertError = await res.text().catch(() => "");
+  const upsertError = firstErrorText || (await res.text().catch(() => ""));
   const insertRes = await fetch(insertUrl, {
     method: "POST",
     headers: {
@@ -1224,10 +1260,28 @@ async function uploadScheduledTestToCloud(data, entry) {
       "Content-Type": "application/json",
       Prefer: "return=representation"
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payloadSnake)
   });
-  if (insertRes.ok) {
-    const rows = await insertRes.json().catch(() => []);
+  let finalInsertRes = insertRes;
+  let insertErrText = "";
+  if (!insertRes.ok) {
+    insertErrText = await insertRes.text().catch(() => "");
+    const needCamelRetry = insertErrText.includes("Could not find the 'calendar_date' column");
+    if (needCamelRetry) {
+      finalInsertRes = await fetch(insertUrl, {
+        method: "POST",
+        headers: {
+          apikey: cfg.anonKey,
+          Authorization: `Bearer ${cfg.anonKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation"
+        },
+        body: JSON.stringify(payloadCamel)
+      });
+    }
+  }
+  if (finalInsertRes.ok) {
+    const rows = await finalInsertRes.json().catch(() => []);
     const cloudId = Array.isArray(rows) ? rows[0]?.id : null;
     if (cloudId && !isUuid(entry.id)) {
       entry.id = cloudId;
@@ -1235,11 +1289,54 @@ async function uploadScheduledTestToCloud(data, entry) {
     }
     return true;
   }
-  const insertError = await insertRes.text().catch(() => "");
+  const insertError = insertErrText || (await finalInsertRes.text().catch(() => ""));
+  const bigintIdError =
+    (upsertError && upsertError.includes("invalid input syntax for type bigint")) ||
+    (insertError && insertError.includes("invalid input syntax for type bigint"));
+  if (bigintIdError) {
+    const payloadSnakeNoId = { ...payloadSnake };
+    const payloadCamelNoId = { ...payloadCamel };
+    delete payloadSnakeNoId.id;
+    delete payloadCamelNoId.id;
+    let noIdRes = await fetch(insertUrl, {
+      method: "POST",
+      headers: {
+        apikey: cfg.anonKey,
+        Authorization: `Bearer ${cfg.anonKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      },
+      body: JSON.stringify(payloadSnakeNoId)
+    });
+    if (!noIdRes.ok) {
+      const noIdErr = await noIdRes.text().catch(() => "");
+      if (noIdErr.includes("Could not find the 'calendar_date' column")) {
+        noIdRes = await fetch(insertUrl, {
+          method: "POST",
+          headers: {
+            apikey: cfg.anonKey,
+            Authorization: `Bearer ${cfg.anonKey}`,
+            "Content-Type": "application/json",
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify(payloadCamelNoId)
+        });
+      }
+    }
+    if (noIdRes.ok) {
+      const rows = await noIdRes.json().catch(() => []);
+      const cloudId = Array.isArray(rows) ? rows[0]?.id : null;
+      if (cloudId != null) {
+        entry.id = String(cloudId);
+        saveLocalScheduledTest(entry);
+      }
+      return true;
+    }
+  }
   console.error("cloudSchedule upload failed", {
     upsertStatus: res.status,
     upsertError,
-    insertStatus: insertRes.status,
+    insertStatus: finalInsertRes.status,
     insertError
   });
   return false;
