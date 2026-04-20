@@ -103,11 +103,10 @@ const REMOVED_DEMO_LOGINS = [
 const AUTO_SCHEDULE_ID = "auto-demo-schedule-all-students";
 
 const SCHOOL_PHOTO_URLS = [
-  "file:///C:/Users/nazhi/.cursor/projects/c-Users-nazhi-Desktop-acron-edu-0-4-2/assets/c__Users_nazhi_AppData_Roaming_Cursor_User_workspaceStorage_2335a6d09ac5d172c091eb972a6cd789_images_WhatsApp_Image_2026-04-20_at_20.00.50-1cff18a2-12f2-49fb-8c80-d5eabd676407.png",
-  "file:///C:/Users/nazhi/.cursor/projects/c-Users-nazhi-Desktop-acron-edu-0-4-2/assets/c__Users_nazhi_AppData_Roaming_Cursor_User_workspaceStorage_2335a6d09ac5d172c091eb972a6cd789_images_WhatsApp_Image_2026-04-20_at_20.00.51-92a6d243-c135-4aa1-a9ff-e85e2a4d35fc.png",
-  "file:///C:/Users/nazhi/.cursor/projects/c-Users-nazhi-Desktop-acron-edu-0-4-2/assets/c__Users_nazhi_AppData_Roaming_Cursor_User_workspaceStorage_2335a6d09ac5d172c091eb972a6cd789_images_WhatsApp_Image_2026-04-20_at_20.00.52__3_-070ffb7e-b940-4a9b-b36e-bf125bc6583c.png",
-  "file:///C:/Users/nazhi/.cursor/projects/c-Users-nazhi-Desktop-acron-edu-0-4-2/assets/c__Users_nazhi_AppData_Roaming_Cursor_User_workspaceStorage_2335a6d09ac5d172c091eb972a6cd789_images_WhatsApp_Image_2026-04-20_at_20.00.53-9110f606-357e-4db5-9d82-327f47a27fa2.png",
-  "file:///C:/Users/nazhi/.cursor/projects/c-Users-nazhi-Desktop-acron-edu-0-4-2/assets/c__Users_nazhi_AppData_Roaming_Cursor_User_workspaceStorage_2335a6d09ac5d172c091eb972a6cd789_images_WhatsApp_Image_2026-04-20_at_20.00.53__1_-194ce05c-d53e-437c-9dca-a1dd0eaa193c.png"
+  "img/school-1.jpg",
+  "img/school-2.jpg",
+  "img/school-3.jpg",
+  "img/school-4.jpg"
 ];
 
 /** 25 школьных вопросов по информатике (автопроверка). topic — тема для отчёта «повторить / усвоение». */
@@ -1012,7 +1011,7 @@ function renderHero(data) {
   const buttons = heroBtns.map((b) => `<button class="btn" type="button" data-hero-btn="${b.id}">${t(b.label)}</button>`).join("");
   const rebrand = data.hero?.rebrand ? `<p class="hero-rebrand">${escapeHtml(t(data.hero.rebrand))}</p>` : "";
   const heroPhoto = SCHOOL_PHOTO_URLS[0]
-    ? `<img class="hero-photo" src="${escapeAttr(SCHOOL_PHOTO_URLS[0])}" alt="${escapeAttr(state.lang === "kz" ? "Мектеп фотосы" : "Фото школы")}" loading="eager" />`
+    ? `<img class="hero-photo" src="${escapeAttr(SCHOOL_PHOTO_URLS[0])}" alt="${escapeAttr(state.lang === "kz" ? "Мектеп фотосы" : "Фото школы")}" loading="eager" onerror="this.style.display='none'" />`
     : "";
   return `<section class="hero"><div class="container"><div class="hero-grid fade-in"><div class="hero-card">${rebrand}<h1 class="hero-title">${t(data.hero.title)}</h1><p class="hero-subtitle">${t(data.hero.subtitle)}</p><div class="hero-buttons">${buttons}</div></div><div class="hero-visual">${heroPhoto}<div class="blob"></div></div></div></div></section>`;
 }
@@ -1025,7 +1024,7 @@ function renderSchoolGallery() {
     (u, i) =>
       `<figure class="school-photo-card"><img src="${escapeAttr(u)}" alt="${escapeAttr(
         state.lang === "kz" ? `Мектеп суреті ${i + 1}` : `Фото школы ${i + 1}`
-      )}" loading="lazy" /></figure>`
+      )}" loading="lazy" onerror="this.closest('.school-photo-card').style.display='none'" /></figure>`
   ).join("");
   return `<section class="section school-gallery-section"><div class="container"><div class="school-gallery-head"><h3 class="section-title">${escapeHtml(
     title
